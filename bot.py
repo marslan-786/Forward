@@ -6,7 +6,8 @@ from telegram import Update, ForceReply
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
 # === Environment variables سے load کریں ===
-BOT_TOKEN = os.getenv("BOT_TOKEN")       # آپ کا Telegram Bot Token
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+print(f"✅ BOT_TOKEN loaded: {BOT_TOKEN}")  # Temporary debug     # آپ کا Telegram Bot Token
 API_ID = int(os.getenv("API_ID"))        # Telegram API ID
 API_HASH = os.getenv("API_HASH")         # Telegram API HASH
 CHECKER_BOT = os.getenv("CHECKER_BOT")   # وہ Checker bot username جس کو /chk بھیجنا ہے (جیسے @CheckerBotUsername)
@@ -29,6 +30,7 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 # === Start command handler ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"[CMD] /start by {update.effective_user.id}")
     if update.effective_user.id != OWNER_ID:
         return
     await update.message.reply_text(
@@ -37,6 +39,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === Login command handler ===
 async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"[CMD] /login by {update.effective_user.id}")
     if update.effective_user.id != OWNER_ID:
         return
     await update.message.reply_text("Please send your phone number with country code, e.g. +923001234567", reply_markup=ForceReply(selective=True))
@@ -120,11 +123,11 @@ async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === Checker bot replies forward ===
 @userbot.on(events.NewMessage(from_users=CHECKER_BOT))
+@userbot.on(events.NewMessage(from_users=CHECKER_BOT))
 async def checker_reply(event):
-    if event.sender_id != CHECKER_BOT:
-        return
-    await userbot.send_message(OWNER_ID, f"Result: {event.text}")
+    await userbot.send_message(OWNER_ID, f"🔍 {event.text}")
 
+# === Main function to start both ===
 # === Main function to start both ===
 async def main():
     # Userbot connect
@@ -134,10 +137,14 @@ async def main():
     else:
         print("✅ Userbot logged in.")
 
-    # Telegram Bot initialize and run polling
+    # Telegram Bot start
     await app.initialize()
     await app.start()
     print("🤖 Bot started!")
+
+    # Run both tasks in parallel
+    loop = asyncio.get_event_loop()
+    loop.create_task(userbot.run_until_disconnected())  # Telethon listener stays alive
     await app.updater.start_polling()
     await app.updater.idle()
 
