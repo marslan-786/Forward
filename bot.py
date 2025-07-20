@@ -11,7 +11,7 @@ print(f"✅ BOT_TOKEN loaded: {BOT_TOKEN}")  # Temporary debug     # آپ کا T
 API_ID = int(os.getenv("API_ID"))        # Telegram API ID
 API_HASH = os.getenv("API_HASH")         # Telegram API HASH
 CHECKER_BOT = os.getenv("CHECKER_BOT")   # وہ Checker bot username جس کو /chk بھیجنا ہے (جیسے @CheckerBotUsername)
-OWNER_ID = int(os.getenv("OWNER_ID"))    # آپ کا Telegram numeric user ID
+
 
 # === Telethon Userbot client ===
 SESSION_NAME = "userbot_session"
@@ -31,8 +31,7 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 # === Start command handler ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"[CMD] /start by {update.effective_user.id}")
-    if update.effective_user.id != OWNER_ID:
-        return
+    
     await update.message.reply_text(
         "👋 Welcome! Use /login to start the login process."
     )
@@ -40,16 +39,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === Login command handler ===
 async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"[CMD] /login by {update.effective_user.id}")
-    if update.effective_user.id != OWNER_ID:
-        return
+    
     await update.message.reply_text("Please send your phone number with country code, e.g. +923001234567", reply_markup=ForceReply(selective=True))
     return PHONE
 
 # === Phone number handler ===
 async def phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _login_phone
-    if update.effective_user.id != OWNER_ID:
-        return ConversationHandler.END
     phone = update.message.text.strip()
     _login_phone = phone
     try:
@@ -64,8 +60,6 @@ async def phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === OTP handler ===
 async def otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global logged_in
-    if update.effective_user.id != OWNER_ID:
-        return ConversationHandler.END
     code = update.message.text.strip()
     try:
         await userbot.sign_in(_login_phone, code)
@@ -82,8 +76,6 @@ async def otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === 2FA handler ===
 async def twofa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global logged_in
-    if update.effective_user.id != OWNER_ID:
-        return ConversationHandler.END
     password = update.message.text.strip()
     try:
         await userbot.sign_in(password=password)
@@ -97,8 +89,7 @@ async def twofa(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === Check command handler with error catching ===
 async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global logged_in
-    if update.effective_user.id != OWNER_ID:
-        return
+    
     if not logged_in:
         await update.message.reply_text("❌ Please login first using /login")
         return
