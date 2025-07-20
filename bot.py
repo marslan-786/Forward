@@ -1,5 +1,6 @@
 import os
 import asyncio
+import nest_asyncio
 from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError
 from telegram import Update, ForceReply
@@ -8,46 +9,54 @@ from telegram.ext import (
     filters, ContextTypes, ConversationHandler
 )
 
-# === Load Environment Variables ===
+# === nest_asyncio لگائیں تاکہ "event loop already running" کا مسئلہ نہ آئے ===
+nest_asyncio.apply()
+
+# === Environment variables سے load کریں ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 CHECKER_BOT = os.getenv("CHECKER_BOT")
 
-# === Global state ===
+# === Telethon Userbot client ===
 SESSION_NAME = "userbot_session"
 userbot = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
+# === Bot handlers میں state کے لیے ===
 PHONE, OTP, TWOFA = range(3)
+
 logged_in = False
 _login_phone = None
 
-# === Telegram Bot ===
+# === Telegram Bot setup ===
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# === /start command ===
+# === Start command handler ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Welcome! Use /login to start the login process.")
+    await update.message.reply_text(
+        "👋 Welcome! Use /login to start the login process."
+    )
 
-# === /login command ===
+# === Login command handler ===
 async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📱 Send your phone number (with +92...)", reply_markup=ForceReply(selective=True))
+    await update.message.reply_text("Please send your phone number with country code, e.g. +923001234567", reply_markup=ForceReply(selective=True))
     return PHONE
 
-# === Phone input ===
+# === Phone number handler ===
 async def phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _login_phone
-    _login_phone = update.message.text.strip()
+    phone = update.message.text.strip()
+    _login_phone = phone
     try:
         await userbot.connect()
-        await userbot.send_code_request(_login_phone)
-        await update.message.reply_text("✅ Code sent! Now send /otp <code>")
+        await userbot.send_code_request(phone)
+        await update.message.reply_text(f"Code sent to {phone}. Please send /otp <code>")
         return OTP
     except Exception as e:
-        await update.message.reply_text(f"❌ Error sending code: {e}")
+        await update.message.reply_text(f"Failed to send code: {e}")
         return ConversationHandler.END
 
-# === OTP input ===
+# === OTP handler ===
 async def otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global logged_in
     code = update.message.text.strip()
@@ -57,83 +66,85 @@ async def otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ Logged in successfully!")
         return ConversationHandler.END
     except SessionPasswordNeededError:
-        await update.message.reply_text("🔒 2FA enabled. Please send /2fa <password>")
+        await update.message.reply_text("🔐 Two-step verification enabled. Please send /2fa <password>")
         return TWOFA
     except Exception as e:
-        await update.message.reply_text(f"❌ Login failed: {e}")
+        await update.message.reply_text(f"Login failed: {e}")
         return ConversationHandler.END
 
-# === 2FA input ===
+# === 2FA handler ===
 async def twofa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global logged_in
     password = update.message.text.strip()
     try:
         await userbot.sign_in(password=password)
         logged_in = True
-        await update.message.reply_text("✅ Logged in with 2FA!")
+        await update.message.reply_text("✅ Logged in successfully with 2FA!")
         return ConversationHandler.END
     except Exception as e:
-        await update.message.reply_text(f"❌ 2FA failed: {e}")
+        await update.message.reply_text(f"2FA failed: {e}")
         return ConversationHandler.END
 
-# === /chk command ===
+# === Check command handler ===
 async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global logged_in
+    
     if not logged_in:
-        await update.message.reply_text("❌ Login first with /login")
+        await update.message.reply_text("❌ Please login first using /login")
+        return
+    text = update.message.text
+    lines = text.split('\n')
+    if len(lines) < 2:
+        await update.message.reply_text("Please send /chk followed by CCs in new lines")
         return
 
-    lines = update.message.text.split("\n")[1:]  # Skip first line (/chk)
-    if not lines:
-        await update.message.reply_text("❗ Send /chk followed by CCs in new lines.")
-        return
+    ccs = lines[1:]
+    await update.message.reply_text(f"⏳ Checking {len(ccs)} CC(s)...")
 
-    await update.message.reply_text(f"🔍 Checking {len(lines)} CC(s)...")
-
-    for cc in lines:
+    for cc in ccs:
         cc = cc.strip()
         if cc:
+            msg = f"/chk {cc}"
             try:
-                await userbot.send_message(CHECKER_BOT, f"/chk {cc}")
+                await userbot.send_message(CHECKER_BOT, msg)
             except Exception as e:
-                await update.message.reply_text(f"❌ Error with CC: {cc}\nError: {e}")
+                await update.message.reply_text(f"❌ Failed to send CC: {cc}\n📛 Error: {str(e)}")
             await asyncio.sleep(5)
 
-# === Forward replies from checker bot ===
+# === Checker bot replies forward ===
 @userbot.on(events.NewMessage(from_users=CHECKER_BOT))
-async def handle_checker_reply(event):
-    try:
-        await userbot.send_message("me", f"💳 {event.text}")
-    except Exception as e:
-        print(f"❌ Failed to forward checker reply: {e}")
+async def checker_reply(event):
+    # آپ چاہیں تو OWNER_ID ڈالیں یہاں، یا جو بھی user ID ہو
+    # میں نے owner wala حصہ نکال دیا آپ کی درخواست پر
+    await userbot.send_message(event.chat_id, f"🔍 {event.text}")
 
-# === Conversation handler ===
+# === Conversation handler setup ===
 conv_handler = ConversationHandler(
-    entry_points=[CommandHandler("login", login)],
+    entry_points=[CommandHandler('login', login)],
     states={
         PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, phone)],
         OTP: [MessageHandler(filters.TEXT & ~filters.COMMAND, otp)],
         TWOFA: [MessageHandler(filters.TEXT & ~filters.COMMAND, twofa)],
     },
-    fallbacks=[]
+    fallbacks=[],
 )
 
-# === Add handlers ===
-app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler('start', start))
 app.add_handler(conv_handler)
-app.add_handler(CommandHandler("chk", chk))
+app.add_handler(CommandHandler('chk', chk))
 
-# === MAIN ===
+# === Main function ===
 async def main():
-    await userbot.connect()
+    await userbot.start()
     print("🟢 Userbot connected")
-
-    # Start userbot in background
-    asyncio.create_task(userbot.run_until_disconnected())
-
-    # Start telegram bot
+    await app.initialize()
+    await app.start()
     print("🤖 Bot starting...")
-    await app.run_polling()
+
+    # Run both concurrently
+    asyncio.create_task(userbot.run_until_disconnected())
+    await app.updater.start_polling()
+    await app.updater.idle()
 
 if __name__ == "__main__":
     import logging
