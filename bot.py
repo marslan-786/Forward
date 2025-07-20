@@ -127,14 +127,18 @@ async def checker_reply(event):
 
 # === Main function to start both ===
 async def main():
+    # Userbot connect
     await userbot.connect()
     if not await userbot.is_user_authorized():
         print("❌ Userbot not logged in. Please login using /login command in bot.")
-    print("Userbot started")
+    else:
+        print("✅ Userbot logged in.")
+
+    # Telegram Bot initialize and run polling
+    await app.initialize()
     await app.start()
-    print("Bot started")
+    print("🤖 Bot started!")
     await app.updater.start_polling()
-    print("Polling started")
     await app.updater.idle()
 
 # === Conversation handler setup ===
