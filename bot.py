@@ -132,21 +132,19 @@ app.add_handler(conv_handler)
 app.add_handler(CommandHandler('chk', chk))
 
 async def main():
+    # userbot connect کریں، لیکن is_user_authorized() چیک نہ کریں
     await userbot.connect()
-    if not await userbot.is_user_authorized():
-        print("❌ Userbot not logged in. Please login using /login command in bot.")
-    else:
-        print("✅ Userbot logged in.")
+    print("🟢 Userbot connected (login status ignored)")
 
+    # Telegram bot start کریں
     await app.initialize()
     await app.start()
     print("🤖 Bot started!")
 
-    # Run both userbot listener and bot polling in parallel
+    # دونوں کو ایک ساتھ چلائیں
     loop = asyncio.get_event_loop()
     loop.create_task(userbot.run_until_disconnected())
-    await app.updater.start_polling()
-    await app.updater.idle()
+    await app.run_polling()
 
 if __name__ == "__main__":
     import logging
